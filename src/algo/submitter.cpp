@@ -1,5 +1,7 @@
 #include "submitter.hpp"
 
+#include <loguru.hpp>
+
 #include "../pempek_assert.hpp"
 
 using namespace std;
@@ -47,11 +49,12 @@ Submitter::Submitter(Workload *workload, SchedulingDecision *decision, Queue *qu
         set_job_metadata = (*variant_options)["set_job_metadata"].GetBool();
     }
 
-    printf("nb_jobs_to_submit: %d\n", nb_jobs_to_submit);
-    printf("increase_jobs_duration: %d\n", increase_jobs_duration);
-    printf("send_profile_if_already_sent: %d\n", send_profile_if_already_sent);
-    printf("send_profiles_in_separate_event: %d\n", send_profiles_in_separate_event);
-    printf("set_job_metadata: %d\n", set_job_metadata);
+    LOG_SCOPE_FUNCTION(INFO);
+    LOG_F(INFO, "nb_jobs_to_submit: %d", nb_jobs_to_submit);
+    LOG_F(INFO, "increase_jobs_duration: %d", increase_jobs_duration);
+    LOG_F(INFO, "send_profile_if_already_sent: %d", send_profile_if_already_sent);
+    LOG_F(INFO, "send_profiles_in_separate_event: %d", send_profiles_in_separate_event);
+    LOG_F(INFO, "set_job_metadata: %d", set_job_metadata);
 }
 
 Submitter::~Submitter()
@@ -63,13 +66,13 @@ void Submitter::on_simulation_start(double date, const rapidjson::Value & batsim
 {
     (void) date;
 
-    available_machines.insert(MachineRange::ClosedInterval(0, _nb_machines - 1));
+    available_machines.insert(IntervalSet::ClosedInterval(0, _nb_machines - 1));
     PPK_ASSERT_ERROR(available_machines.size() == (unsigned int) _nb_machines);
 
-    PPK_ASSERT_ERROR(batsim_config["job_submission"]["from_scheduler"]["enabled"].GetBool(),
-            "This algorithm only works if dynamic job submissions are enabled!");
-    dyn_submit_ack = batsim_config["job_submission"]["from_scheduler"]["acknowledge"].GetBool();
-    redis_enabled = batsim_config["redis"]["enabled"].GetBool();
+    PPK_ASSERT_ERROR(batsim_config["dynamic-jobs-enabled"].GetBool(),
+            "This algorithm only works if dynamic job are enabled!");
+    dyn_submit_ack = batsim_config["dynamic-jobs-acknowledged"].GetBool();
+    redis_enabled = batsim_config["redis-enabled"].GetBool();
 }
 
 void Submitter::on_simulation_end(double date)
@@ -121,7 +124,7 @@ void Submitter::make_decisions(double date,
 
         if (job->nb_requested_resources <= (int)available_machines.size())
         {
-            MachineRange used_machines;
+            IntervalSet used_machines;
             if (_selector->fit(job, available_machines, used_machines))
             {
                 _decision->add_execute_job(job->id, used_machines, date);
@@ -150,7 +153,7 @@ void Submitter::make_decisions(double date,
                 // The execution is done 10 seconds after submitting the job
                 date = date + 10;
 
-                MachineRange used_machines = available_machines.left(1);
+                IntervalSet used_machines = available_machines.left(1);
 
                 string job_id = "dynamic!" + to_string(nb_submitted_jobs);
                 _decision->add_execute_job(job_id, used_machines, date);

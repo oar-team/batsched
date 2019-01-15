@@ -1,2 +1,5 @@
 *.user
 build
+test-out
+test-instances
+cover

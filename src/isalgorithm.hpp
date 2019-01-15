@@ -31,7 +31,7 @@ public:
     /**
      * @brief Destroys a ISchedulingAlgorithm
      */
-    virtual ~ISchedulingAlgorithm() {}
+    virtual ~ISchedulingAlgorithm();
 
     /**
      * @brief This function is called when the simulation is about to begin
@@ -70,26 +70,19 @@ public:
      * @param[in] machines The machines involved in the power state alteration
      * @param[in] new_state The new power state of the machines: The state they are in, after the alteration
      */
-    virtual void on_machine_state_changed(double date, MachineRange machines, int new_state);
+    virtual void on_machine_state_changed(double date, IntervalSet machines, int new_state);
 
     /**
-     * @brief This function is called when some machines failed
-     * @param[in] date The date at which the machines failed
-     * @param[in] machines The machines which failed
-     */
-    virtual void on_failure(double date, MachineRange machines);
-    /**
-     * @brief This function is called when some machines are no longer in a failure state
-     * @param[in] date The date at which the machines have been fixed
-     * @param[in] machines The machines which have been fixed
-     */
-    virtual void on_failure_end(double date, MachineRange machines);
-
-    /**
-     * @brief This function is called when a NOP message is received
-     * @param[in] date The date at which the NOP message have been received
+     * @brief This function is called when a REQUESTED_CALL message is received
+     * @param[in] date The date at which the REQUESTED_CALL message have been received
      */
     virtual void on_requested_call(double date);
+
+    /**
+     * @brief This function is called when the no_more_static_job_to_submit
+     *        notification is received
+     */
+    virtual void on_no_more_static_job_to_submit_received(double date);
 
     /**
      * @brief This function is called when an ANSWER message about energy consumption is received
@@ -143,23 +136,14 @@ protected:
     rapidjson::Document * _variant_options;
     int _nb_machines = -1;
     RedisStorage * _redis = nullptr;
-
-    struct Failure
-    {
-        Failure(double date, MachineRange machines, bool failed);
-
-        double date;
-        MachineRange machines;
-        bool failed;
-    };
+    bool _no_more_static_job_to_submit_received = false;
 
 protected:
     std::vector<std::string> _jobs_released_recently;
     std::vector<std::string> _jobs_ended_recently;
     std::vector<std::string> _jobs_killed_recently;
     std::vector<std::string> _jobs_whose_waiting_time_estimation_has_been_requested_recently;
-    std::map<int, MachineRange> _machines_whose_pstate_changed_recently;
-    std::vector<Failure> _recent_failstate_changes;
+    std::map<int, IntervalSet> _machines_whose_pstate_changed_recently;
     bool _nopped_recently;
     bool _consumed_joules_updated_recently;
     double _consumed_joules;

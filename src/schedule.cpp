@@ -4,6 +4,8 @@
 #include <fstream>
 #include <stdio.h>
 
+#include <loguru.hpp>
+
 #include "pempek_assert.hpp"
 
 using namespace std;
@@ -17,9 +19,9 @@ Schedule::Schedule(int nb_machines, Rational initial_time)
     slice.begin = initial_time;
     slice.end = 1e19; // greater than the number of seconds elapsed since the big bang
     slice.length = slice.end - slice.begin;
-    slice.available_machines.insert(MachineRange::ClosedInterval(0, nb_machines - 1));
+    slice.available_machines.insert(IntervalSet::ClosedInterval(0, nb_machines - 1));
     slice.nb_available_machines = nb_machines;
-    PPK_ASSERT(slice.available_machines.size() == (unsigned int)nb_machines);
+    PPK_ASSERT_ERROR(slice.available_machines.size() == (unsigned int)nb_machines);
 
     _profile.push_back(slice);
 
@@ -144,8 +146,9 @@ Schedule::JobAlloc Schedule::add_job_first_fit_after_time_slice(const Job *job,
 {
     if (_debug)
     {
-        printf("Adding job '%s' (size=%d, walltime=%g). Output number %d. %s", job->id.c_str(),
-            job->nb_requested_resources, (double)job->walltime, _output_number, to_string().c_str());
+        LOG_F(1, "Adding job '%s' (size=%d, walltime=%g). Output number %d. %s",
+            job->id.c_str(), job->nb_requested_resources, (double)job->walltime,
+            _output_number, to_string().c_str());
         output_to_svg();
     }
 
@@ -198,7 +201,7 @@ Schedule::JobAlloc Schedule::add_job_first_fit_after_time_slice(const Job *job,
 
                     if (_debug)
                     {
-                        printf("Added job '%s' (size=%d, walltime=%g). Output number %d. %s", job->id.c_str(),
+                        LOG_F(1, "Added job '%s' (size=%d, walltime=%g). Output number %d. %s", job->id.c_str(),
                             job->nb_requested_resources, (double)job->walltime, _output_number, to_string().c_str());
                         output_to_svg();
                     }
@@ -263,7 +266,7 @@ Schedule::JobAlloc Schedule::add_job_first_fit_after_time_slice(const Job *job,
 
                             if (_debug)
                             {
-                                printf("Added job '%s' (size=%d, walltime=%g). Output number %d. %s", job->id.c_str(),
+                                LOG_F(1, "Added job '%s' (size=%d, walltime=%g). Output number %d. %s", job->id.c_str(),
                                     job->nb_requested_resources, (double)job->walltime, _output_number,
                                     to_string().c_str());
                                 output_to_svg();
@@ -292,7 +295,7 @@ Schedule::JobAlloc Schedule::add_job_first_fit_after_time(
 {
     if (_debug)
     {
-        printf("Adding job '%s' (size=%d, walltime=%g) after date %g. Output number %d. %s", job->id.c_str(),
+        LOG_F(1, "Adding job '%s' (size=%d, walltime=%g) after date %g. Output number %d. %s", job->id.c_str(),
             job->nb_requested_resources, (double)job->walltime, (double)date, _output_number, to_string().c_str());
         output_to_svg();
     }
@@ -350,7 +353,7 @@ double Schedule::query_wait(int size, Rational time, ResourceSelector *selector)
             // If the job fits in the current time slice (temporarily speaking)
             if (totalTime >= time)
             {
-                MachineRange used_machines;
+                IntervalSet used_machines;
 
                 // If the job fits in the current time slice (according to the fitting function)
                 if (selector->fit(&fake_job, pit->available_machines, used_machines))
@@ -378,7 +381,7 @@ double Schedule::query_wait(int size, Rational time, ResourceSelector *selector)
                     else if (totalTime >= time) // The job fits in the slices [pit, pit2[ (temporarily speaking)
                     {
 
-                        MachineRange used_machines;
+                        IntervalSet used_machines;
 
                         // If the job fits in the current time slice (according to the fitting function)
                         if (selector->fit(&fake_job, availableMachines, used_machines))
@@ -694,7 +697,7 @@ Schedule::TimeSliceConstIterator Schedule::find_first_time_slice_after_date(Rati
     return _profile.end();
 }
 
-MachineRange Schedule::available_machines_during_period(Rational begin, Rational end) const
+IntervalSet Schedule::available_machines_during_period(Rational begin, Rational end) const
 {
     PPK_ASSERT_ERROR(
         begin >= first_slice_begin(), "begin=%f, first_slice_begin()=%f", (double)begin, (double)first_slice_begin());
@@ -702,7 +705,7 @@ MachineRange Schedule::available_machines_during_period(Rational begin, Rational
         end <= infinite_horizon(), "end=%f, infinite_horizon()=%f", (double)end, (double)infinite_horizon());
 
     auto slice_it = find_first_time_slice_after_date(begin);
-    MachineRange available_machines = slice_it->available_machines;
+    IntervalSet available_machines = slice_it->available_machines;
 
     while (slice_it != _profile.end() && slice_it->begin < end)
     {
@@ -712,6 +715,31 @@ MachineRange Schedule::available_machines_during_period(Rational begin, Rational
     }
 
     return available_machines;
+}
+
+std::list<Schedule::TimeSlice>::iterator Schedule::begin()
+{
+    return _profile.begin();
+}
+
+std::list<Schedule::TimeSlice>::iterator Schedule::end()
+{
+    return _profile.end();
+}
+
+std::list<Schedule::TimeSlice>::const_iterator Schedule::begin() const
+{
+    return _profile.cbegin();
+}
+
+std::list<Schedule::TimeSlice>::const_iterator Schedule::end() const
+{
+    return _profile.cend();
+}
+
+int Schedule::nb_slices() const
+{
+    return (int) _profile.size();
 }
 
 string Schedule::to_string() const
@@ -808,14 +836,12 @@ string Schedule::to_svg() const
             Rational rect_width = rect_x1 - rect_x0;
             string rect_color = _colors[job->unique_number % (int)_colors.size()];
 
-            // printf("Writing rects for job %d\n", job_id);
-
             // Let's find where the job has been allocated
             PPK_ASSERT_ERROR(slice_it != _profile.begin());
             auto previous_slice_it = slice_it;
             --previous_slice_it;
 
-            MachineRange job_machines = previous_slice_it->allocated_jobs.at(job);
+            IntervalSet job_machines = previous_slice_it->allocated_jobs.at(job);
 
             // Let's create a rectangle for each contiguous part of the allocation
             for (auto it = job_machines.intervals_begin(); it != job_machines.intervals_end(); ++it)
@@ -825,9 +851,6 @@ string Schedule::to_svg() const
                 Rational rect_y1 = ((it->upper() + Rational(1)) * machine_height)
                     - (space_between_machines_ratio * machine_height) - y0;
                 Rational rect_height = rect_y1 - rect_y0;
-
-                /*printf("rect_y0=%g, rect_y1=%g, rect_height=%g\n",
-                       (double)rect_y0, (double)rect_y1, (double)rect_height);*/
 
                 snprintf(buf, buf_size,
                     "  <rect x=\"%g\" y=\"%g\" width=\"%g\" height=\"%g\" style=\"stroke:black; stroke-width=%g; "
@@ -919,11 +942,11 @@ void Schedule::remove_job_internal(const Job *job, Schedule::TimeSliceIterator r
 {
     // Let's retrieve the machines used by the job
     PPK_ASSERT_ERROR(removal_point->allocated_jobs.count(job) == 1);
-    MachineRange job_machines = removal_point->allocated_jobs.at(job);
+    IntervalSet job_machines = removal_point->allocated_jobs.at(job);
 
     if (_debug)
     {
-        printf("Removing job '%s'. Output number %d. %s", job->id.c_str(), _output_number, to_string().c_str());
+        LOG_F(1, "Removing job '%s'. Output number %d. %s", job->id.c_str(), _output_number, to_string().c_str());
         output_to_svg();
     }
 
@@ -1015,7 +1038,7 @@ void Schedule::remove_job_internal(const Job *job, Schedule::TimeSliceIterator r
 
             if (_debug)
             {
-                printf("Removed job '%s'. Output number %d. %s", job->id.c_str(), _output_number, to_string().c_str());
+                LOG_F(1, "Removed job '%s'. Output number %d. %s", job->id.c_str(), _output_number, to_string().c_str());
                 output_to_svg();
             }
 

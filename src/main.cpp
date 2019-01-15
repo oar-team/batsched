@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <vector>
-#include <iostream>
 #include <fstream>
 #include <set>
 
@@ -9,6 +8,8 @@
 #include <boost/format.hpp>
 
 #include <rapidjson/document.h>
+
+#include <loguru.hpp>
 
 #include "external/taywee_args.hpp"
 
@@ -83,10 +84,12 @@ int main(int argc, char ** argv)
     const set<string> policies_set = {"basic", "contiguous"};
     const set<string> queue_orders_set = {"fcfs", "lcfs", "desc_bounded_slowdown", "desc_slowdown",
                                           "asc_size", "desc_size", "asc_walltime", "desc_walltime"};
+    const set<string> verbosity_levels_set = {"debug", "info", "quiet", "silent"};
 
     const string variants_string = "{" + boost::algorithm::join(variants_set, ", ") + "}";
     const string policies_string = "{" + boost::algorithm::join(policies_set, ", ") + "}";
     const string queue_orders_string = "{" + boost::algorithm::join(queue_orders_set, ", ") + "}";
+    const string verbosity_levels_string = "{" + boost::algorithm::join(verbosity_levels_set, ", ") + "}";
 
     ISchedulingAlgorithm * algo = nullptr;
     ResourceSelector * selector = nullptr;
@@ -104,6 +107,7 @@ int main(int argc, char ** argv)
     args::ValueFlag<string> flag_variant_options(parser, "options", "Sets the scheduling variant options. Must be formatted as a JSON object.", {"variant_options"}, "{}");
     args::ValueFlag<string> flag_variant_options_filepath(parser, "options-filepath", "Sets the scheduling variant options as the content of the given filepath. Overrides the variant_options options.", {"variant_options_filepath"}, "");
     args::ValueFlag<string> flag_queue_order(parser, "order", "Sets the queue order. Available values are " + queue_orders_string, {'o', "queue_order"}, "fcfs");
+    args::ValueFlag<string> flag_verbosity_level(parser, "verbosity-level", "Sets the verbosity level. Available values are " + verbosity_levels_string, {"verbosity"}, "info");
     args::ValueFlag<bool> flag_call_make_decisions_on_single_nop(parser, "flag", "If set to true, make_decisions will be called after single NOP messages.", {"call_make_decisions_on_single_nop"}, true);
     args::Flag flag_version(parser, "version", "Shows batsched version", {"version"});
 
@@ -127,6 +131,12 @@ int main(int argc, char ** argv)
                                             % flag_scheduling_variant.Name()
                                             % flag_scheduling_variant.Get()
                                             % variants_string));
+
+        if (verbosity_levels_set.find(flag_verbosity_level.Get()) == verbosity_levels_set.end())
+            throw args::ValidationError(str(format("Invalid '%1%' value (%2%): Not in %3%")
+                                            % flag_verbosity_level.Name()
+                                            % flag_verbosity_level.Get()
+                                            % verbosity_levels_string));
     }
     catch(args::Help)
     {
@@ -162,11 +172,22 @@ int main(int argc, char ** argv)
     string queue_order = flag_queue_order.Get();
     string variant_options = flag_variant_options.Get();
     string variant_options_filepath = flag_variant_options_filepath.Get();
+    string verbosity_level = flag_verbosity_level.Get();
     double rjms_delay = flag_rjms_delay.Get();
     bool call_make_decisions_on_single_nop = flag_call_make_decisions_on_single_nop.Get();
 
     try
     {
+        // Logging configuration
+        if (verbosity_level == "debug")
+            loguru::g_stderr_verbosity = loguru::Verbosity_1;
+        else if (verbosity_level == "quiet")
+            loguru::g_stderr_verbosity = loguru::Verbosity_WARNING;
+        else if (verbosity_level == "silent")
+            loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
+        else
+            loguru::g_stderr_verbosity = loguru::Verbosity_INFO;
+
         // Workload creation
         Workload w;
         w.set_rjms_delay(rjms_delay);
@@ -234,7 +255,7 @@ int main(int argc, char ** argv)
             printf("Invalid variant options: Not a JSON object. variant_options='%s'\n", variant_options.c_str());
             return 1;
         }
-        printf("variant_options = '%s'\n", variant_options.c_str());
+        LOG_F(1, "variant_options = '%s'", variant_options.c_str());
 
         // Scheduling variant
         if (scheduling_variant == "filler")
@@ -295,11 +316,11 @@ int main(int argc, char ** argv)
 
         if (what == "Connection lost")
         {
-            cout << what << endl;
+            LOG_F(ERROR, "%s", what.c_str());
         }
         else
         {
-            cout << "Error: " << e.what() << endl;
+            LOG_F(ERROR, "%s", what.c_str());
 
             delete queue;
             delete order;
@@ -359,14 +380,23 @@ void run(Network & n, ISchedulingAlgorithm * algo, SchedulingDecision & d,
 
             if (event_type == "SIMULATION_BEGINS")
             {
-                int nb_resources = event_data["nb_resources"].GetInt();
-                redis_enabled = event_data["config"]["redis"]["enabled"].GetBool();
+                int nb_resources;
+                // DO this for retrocompatibility with batsim 2 API
+                if (event_data.HasMember("nb_compute_resources"))
+                {
+                    nb_resources = event_data["nb_compute_resources"].GetInt();
+                }
+                else
+                {
+                    nb_resources = event_data["nb_resources"].GetInt();
+                }
+                redis_enabled = event_data["config"]["redis-enabled"].GetBool();
 
                 if (redis_enabled)
                 {
-                    string redis_hostname = event_data["config"]["redis"]["hostname"].GetString();
-                    int redis_port = event_data["config"]["redis"]["port"].GetInt();
-                    string redis_prefix = event_data["config"]["redis"]["prefix"].GetString();
+                    string redis_hostname = event_data["config"]["redis-hostname"].GetString();
+                    int redis_port = event_data["config"]["redis-port"].GetInt();
+                    string redis_prefix = event_data["config"]["redis-prefix"].GetString();
 
                     redis.connect_to_server(redis_hostname, redis_port, nullptr);
                     redis.set_instance_key_prefix(redis_prefix);
@@ -401,7 +431,7 @@ void run(Network & n, ISchedulingAlgorithm * algo, SchedulingDecision & d,
             }
             else if (event_type == "RESOURCE_STATE_CHANGED")
             {
-                MachineRange resources = MachineRange::from_string_hyphen(event_data["resources"].GetString(), " ");
+                IntervalSet resources = IntervalSet::from_string_hyphen(event_data["resources"].GetString(), " ");
                 string new_state = event_data["state"].GetString();
                 algo->on_machine_state_changed(current_date, resources, std::stoi(new_state));
             }
@@ -463,6 +493,20 @@ void run(Network & n, ISchedulingAlgorithm * algo, SchedulingDecision & d,
                         PPK_ASSERT_ERROR(false, "Unknown QUERY type received '%s'", key_value.c_str());
                     }
                 }
+            }
+            else if (event_type == "NOTIFY")
+            {
+                string notify_type = event_data["type"].GetString();
+
+                if (notify_type == "no_more_static_job_to_submit")
+                {
+                    algo->on_no_more_static_job_to_submit_received(current_date);
+                }
+                else
+                {
+                    throw runtime_error("Unknown NOTIFY type received. Type = " + notify_type);
+                }
+
             }
             else
             {

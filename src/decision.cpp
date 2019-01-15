@@ -19,7 +19,7 @@ SchedulingDecision::~SchedulingDecision()
     _proto_writer = nullptr;
 }
 
-void SchedulingDecision::add_execute_job(const std::string & job_id, const MachineRange &machine_ids, double date, vector<int> executor_to_allocated_resource_mapping)
+void SchedulingDecision::add_execute_job(const std::string & job_id, const IntervalSet &machine_ids, double date, vector<int> executor_to_allocated_resource_mapping)
 {
     if (executor_to_allocated_resource_mapping.size() == 0)
         _proto_writer->append_execute_job(job_id, machine_ids, date);
@@ -56,10 +56,10 @@ void SchedulingDecision::add_submit_job(const string & workload_name,
         _redis->set(job_key, job_json_description);
         _redis->set(profile_key, profile_json_description);
 
-        _proto_writer->append_submit_job(complete_job_id, date, "", "", send_profile);
+        _proto_writer->append_register_job(complete_job_id, date, "", "", send_profile);
     }
     else
-        _proto_writer->append_submit_job(complete_job_id, date,
+        _proto_writer->append_register_job(complete_job_id, date,
                                          job_json_description,
                                          profile_json_description,
                                          send_profile);
@@ -70,13 +70,13 @@ void SchedulingDecision::add_submit_profile(const string &workload_name,
                                             const string &profile_json_description,
                                             double date)
 {
-    _proto_writer->append_submit_profile(workload_name,
+    _proto_writer->append_register_profile(workload_name,
                                          profile_name,
                                          profile_json_description,
                                          date);
 }
 
-void SchedulingDecision::add_set_resource_state(MachineRange machines, int new_state, double date)
+void SchedulingDecision::add_set_resource_state(IntervalSet machines, int new_state, double date)
 {
     _proto_writer->append_set_resource_state(machines, std::to_string(new_state), date);
 }

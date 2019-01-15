@@ -23,7 +23,6 @@ void ISchedulingAlgorithm::clear_recent_data_structures()
     _jobs_killed_recently.clear();
     _jobs_whose_waiting_time_estimation_has_been_requested_recently.clear();
     _machines_whose_pstate_changed_recently.clear();
-    _recent_failstate_changes.clear();
     _nopped_recently = false;
     _consumed_joules_updated_recently = false;
     _consumed_joules = -1;
@@ -37,6 +36,11 @@ ISchedulingAlgorithm::ISchedulingAlgorithm(Workload *workload,
                                            rapidjson::Document *variant_options) :
     _workload(workload), _decision(decision), _queue(queue), _selector(selector),
     _rjms_delay(rjms_delay), _variant_options(variant_options)
+{
+
+}
+
+ISchedulingAlgorithm::~ISchedulingAlgorithm()
 {
 
 }
@@ -65,7 +69,7 @@ void ISchedulingAlgorithm::on_job_killed(double date, const std::vector<string> 
                                  job_ids.end());
 }
 
-void ISchedulingAlgorithm::on_machine_state_changed(double date, MachineRange machines, int new_state)
+void ISchedulingAlgorithm::on_machine_state_changed(double date, IntervalSet machines, int new_state)
 {
     (void) date;
 
@@ -75,22 +79,16 @@ void ISchedulingAlgorithm::on_machine_state_changed(double date, MachineRange ma
         _machines_whose_pstate_changed_recently[new_state] += machines;
 }
 
-void ISchedulingAlgorithm::on_failure(double date, MachineRange machines)
-{
-    (void) date;
-    _recent_failstate_changes.push_back(Failure(date, machines, true));
-}
-
-void ISchedulingAlgorithm::on_failure_end(double date, MachineRange machines)
-{
-    (void) date;
-    _recent_failstate_changes.push_back(Failure(date, machines, false));
-}
-
 void ISchedulingAlgorithm::on_requested_call(double date)
 {
     (void) date;
     _nopped_recently = true;
+}
+
+void ISchedulingAlgorithm::on_no_more_static_job_to_submit_received(double date)
+{
+    (void) date;
+    _no_more_static_job_to_submit_received = true;
 }
 
 void ISchedulingAlgorithm::on_answer_energy_consumption(double date, double consumed_joules)
@@ -104,12 +102,4 @@ void ISchedulingAlgorithm::on_query_estimate_waiting_time(double date, const str
 {
     (void) date;
     _jobs_whose_waiting_time_estimation_has_been_requested_recently.push_back(job_id);
-}
-
-ISchedulingAlgorithm::Failure::Failure(double date, MachineRange machines, bool failed) :
-    date(date),
-    machines(machines),
-    failed(failed)
-{
-
 }

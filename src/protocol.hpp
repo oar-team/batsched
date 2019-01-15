@@ -7,7 +7,7 @@
 
 #include <rapidjson/document.h>
 
-#include "machine_range.hpp"
+#include <intervalset.hpp>
 
 struct BatsimContext;
 
@@ -20,7 +20,7 @@ public:
     /**
      * @brief Destructor
      */
-    virtual ~AbstractProtocolWriter() {}
+    virtual ~AbstractProtocolWriter();
 
     /**
      * @brief Appends a QUERY message to ask Batsim about the current platform energy consumption (since time 0).
@@ -40,7 +40,7 @@ public:
 
     // Messages from the Scheduler to Batsim
     /**
-     * @brief Appends a SUBMIT_JOB event.
+     * @brief Appends a REGISTER_JOB event.
      * @details The job_description and profile_descriptions are either both given or both empty.
      *          If they are given, the job and profile information is sent within the protocol.
      *          Otherwise, it is sent by another channel (probably redis).
@@ -50,13 +50,13 @@ public:
      * @param[in] job_description The job description string. Can be empty.
      * @param[in] profile_description The profile description string. Can be empty.
      */
-    virtual void append_submit_job(const std::string & job_id,
+    virtual void append_register_job(const std::string & job_id,
                                    double date,
                                    const std::string & job_description = "",
                                    const std::string & profile_description = "",
                                    bool send_profile = true) = 0;
 
-    virtual void append_submit_profile(const std::string & workload_name,
+    virtual void append_register_profile(const std::string & workload_name,
                                       const std::string & profile_name,
                                       const std::string & profile_description,
                                       double date) = 0;
@@ -73,7 +73,7 @@ public:
      *            the job size, and executor i is launched on allocated resource i.
      */
     virtual void append_execute_job(const std::string & job_id,
-                                    const MachineRange & allocated_resources,
+                                    const IntervalSet & allocated_resources,
                                     double date,
                                     const std::vector<int> & executor_to_allocated_resource_mapping = {}) = 0;
 
@@ -100,7 +100,7 @@ public:
      * @param[in] new_state The state the machines should be set into.
      * @param[in] date The event date. Must be greater than or equal to the previous event.
      */
-    virtual void append_set_resource_state(MachineRange resources,
+    virtual void append_set_resource_state(IntervalSet resources,
                                            const std::string & new_state,
                                            double date)  = 0;
 
@@ -193,7 +193,7 @@ public:
 
     // Messages from the Scheduler to Batsim
     /**
-     * @brief Appends a SUBMIT_JOB event.
+     * @brief Appends a REGISTER_JOB event.
      * @details The job_description and profile_descriptions are either both given or both empty.
      *          If they are given, the job and profile information is sent within the protocol.
      *          Otherwise, it is sent by another channel (probably redis).
@@ -203,13 +203,13 @@ public:
      * @param[in] job_description The job description string. Can be empty.
      * @param[in] profile_description The profile description string. Can be empty.
      */
-    void append_submit_job(const std::string & job_id,
+    void append_register_job(const std::string & job_id,
                            double date,
                            const std::string & job_description = "",
                            const std::string & profile_description = "",
                            bool send_profile = true);
 
-    void append_submit_profile(const std::string & workload_name,
+    void append_register_profile(const std::string & workload_name,
                                           const std::string & profile_name,
                                           const std::string & profile_description,
                                           double date);
@@ -226,7 +226,7 @@ public:
      *            the job size, and executor i is launched on allocated resource i.
      */
     void append_execute_job(const std::string & job_id,
-                            const MachineRange & allocated_resources,
+                            const IntervalSet & allocated_resources,
                             double date,
                             const std::vector<int> & executor_to_allocated_resource_mapping = {});
 
@@ -253,7 +253,7 @@ public:
      * @param[in] new_state The state the machines should be set into.
      * @param[in] date The event date. Must be greater than or equal to the previous event.
      */
-    void append_set_resource_state(MachineRange resources,
+    void append_set_resource_state(IntervalSet resources,
                                    const std::string & new_state,
                                    double date);
 
@@ -300,13 +300,13 @@ public:
      * @brief Returns whether the Writer has content
      * @return Whether the Writer has content
      */
-    bool is_empty() { return _is_empty; }
+    bool is_empty();
 
     /**
      * @brief Returns the latest date that has been set in the events
      * @return The latest date that has been set in the events
      */
-    double last_date() { return _last_date; }
+    double last_date();
 
 private:
     bool _is_empty = true; //!< Stores whether events have been pushed into the writer since last clear.

@@ -1,6 +1,6 @@
 #include "energy_bf_dicho.hpp"
 
-#include <iostream>
+#include <loguru.hpp>
 
 #include "../pempek_assert.hpp"
 
@@ -26,8 +26,6 @@ EnergyBackfillingDichotomy::EnergyBackfillingDichotomy(Workload *workload, Sched
 
     if (variant_options->HasMember("comparison_type"))
     {
-        cout << "Comparison type found in options!" << endl;
-
         PPK_ASSERT_ERROR((*variant_options)["comparison_type"].IsString(),
                          "Invalid options JSON object: Member 'comparison_type' should be a string");
         string comp_type = (*variant_options)["comparison_type"].GetString();
@@ -104,9 +102,9 @@ void EnergyBackfillingDichotomy::make_decisions(double date,
     // Let's compute global informations about the current online schedule
     // *******************************************************************
     const Schedule::TimeSlice & online_first_slice = *_schedule.begin();
-    MachineRange sleeping_machines = compute_sleeping_machines(online_first_slice);
-    MachineRange awakenable_sleeping_machines = compute_potentially_awaken_machines(online_first_slice);
-    const MachineRange & available_machines = online_first_slice.available_machines;
+    IntervalSet sleeping_machines = compute_sleeping_machines(online_first_slice);
+    IntervalSet awakenable_sleeping_machines = compute_potentially_awaken_machines(online_first_slice);
+    const IntervalSet & available_machines = online_first_slice.available_machines;
 
     // ****************************************************************
     // Let's first compute the schedule in which all nodes are awakened
@@ -119,7 +117,7 @@ void EnergyBackfillingDichotomy::make_decisions(double date,
         for (auto machine_it = sleeping_machines.elements_begin(); machine_it != sleeping_machines.elements_end(); ++machine_it)
         {
             int machine_id = *machine_it;
-            Rational wake_up_moment = find_earliest_moment_to_awaken_machines(awakened_schedule, MachineRange(machine_id));
+            Rational wake_up_moment = find_earliest_moment_to_awaken_machines(awakened_schedule, IntervalSet(machine_id));
             awaken_machine(awakened_schedule, machine_id, wake_up_moment);
         }
     }
@@ -161,12 +159,12 @@ void EnergyBackfillingDichotomy::make_decisions(double date,
     // Let's do a dichotomy on the number of machines to awaken/sedate to find the best solution
     // *****************************************************************************************
 
-    cout << "should_sedate_machines " << should_sedate_machines << endl;
+    LOG_F(INFO, "should_sedate_machines=%d", should_sedate_machines);
 
     if (should_sedate_machines)
     {
          // Sleeping machines are not available since they compute "fake" jobs
-        MachineRange sedatable_machines = available_machines;
+        IntervalSet sedatable_machines = available_machines;
 
         int nb_to_sedate_min = 1; // Online schedule is nb_to_sedate = 0
         int nb_to_sedate_max = sedatable_machines.size();
@@ -182,7 +180,7 @@ void EnergyBackfillingDichotomy::make_decisions(double date,
             // Select machines to sedate
             int nb_to_sedate = (nb_to_sedate_min + nb_to_sedate_max) / 2;
 
-            MachineRange machines_to_sedate;
+            IntervalSet machines_to_sedate;
             _selector->select_resources_to_sedate(nb_to_sedate, available_machines, sedatable_machines, machines_to_sedate);
 
             // Create the schedule with the desired sedated machines
@@ -207,9 +205,9 @@ void EnergyBackfillingDichotomy::make_decisions(double date,
                 Rational best_sched_energy = estimate_energy_of_schedule(best_schedule, comparison_horizon);
                 Rational sched_energy = estimate_energy_of_schedule(schedule, comparison_horizon);
 
-                cout << "Current schedule respects the mean slowdown constraint. "
-                     << "(best_energy, curr_energy) : (" << (double) best_sched_energy
-                     << ", " << (double)sched_energy << ")" << endl;
+                LOG_F(INFO, "Current schedule respects the mean slowdown constraint. "
+                     "(best_energy, curr_energy) : (%g, %g)",
+                     (double)best_sched_energy, (double)sched_energy);
 
                 // Let's update the best solution if needed
                 if ((sched_energy < best_sched_energy) ||
@@ -244,7 +242,7 @@ void EnergyBackfillingDichotomy::make_decisions(double date,
         {
             // Select machines to awaken
             int nb_to_awaken = (nb_to_awaken_min + nb_to_awaken_max) / 2;
-            MachineRange machines_to_awaken;
+            IntervalSet machines_to_awaken;
             _selector->select_resources_to_awaken(nb_to_awaken, available_machines, awakenable_sleeping_machines, machines_to_awaken);
 
             // Create the schedule with the desired awakened machines
@@ -253,7 +251,7 @@ void EnergyBackfillingDichotomy::make_decisions(double date,
             for (auto machine_it = machines_to_awaken.elements_begin(); machine_it != machines_to_awaken.elements_end(); ++machine_it)
             {
                 int machine_id = *machine_it;
-                Rational wake_up_date = find_earliest_moment_to_awaken_machines(schedule, MachineRange(machine_id));
+                Rational wake_up_date = find_earliest_moment_to_awaken_machines(schedule, IntervalSet(machine_id));
                 awaken_machine(schedule, machine_id, wake_up_date);
             }
 
@@ -269,9 +267,9 @@ void EnergyBackfillingDichotomy::make_decisions(double date,
                 Rational best_sched_energy = estimate_energy_of_schedule(best_schedule, comparison_horizon);
                 Rational sched_energy = estimate_energy_of_schedule(schedule, comparison_horizon);
 
-                cout << "Current schedule respects the mean slowdown constraint. "
-                     << "(best_energy, curr_energy) : (" << (double) best_sched_energy
-                     << ", " << (double)sched_energy << ")" << endl;
+                LOG_F(INFO, "Current schedule respects the mean slowdown constraint. "
+                     "(best_energy, curr_energy) : (%g, %g)",
+                     (double)best_sched_energy, (double)sched_energy);
 
                 // Let's update the best solution if needed
                 if ((sched_energy < best_sched_energy) ||

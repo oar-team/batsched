@@ -6,7 +6,7 @@
 
 #include "exact_numbers.hpp"
 #include "data_storage.hpp"
-#include "machine_range.hpp"
+#include <intervalset.hpp>
 
 struct JobAlloc;
 
@@ -29,16 +29,13 @@ struct JobAlloc
   bool started_in_first_slice;
   bool has_been_inserted = true;
   const Job * job;
-  MachineRange used_machines;
+  IntervalSet used_machines;
 };
 
 
 struct JobComparator
 {
-    bool operator()(const Job * j1, const Job * j2) const
-    {
-        return j1->id < j2->id;
-    }
+    bool operator()(const Job * j1, const Job * j2) const;
 };
 
 class Workload
@@ -48,7 +45,7 @@ public:
 
     Job * operator[] (std::string jobID);
     const Job * operator[] (std::string jobID) const;
-    int nb_jobs() const { return _jobs.size(); }
+    int nb_jobs() const;
 
     void set_rjms_delay(Rational rjms_delay);
 

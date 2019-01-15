@@ -10,6 +10,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 # Options
 option(enable_warnings "Enable compilation warnings" ON)
 option(treat_warnings_as_errors "Treat compilation warnings as compilation errors" OFF)
+option(do_coverage "Compile in coverage mode" OFF)
 
 # Build type
 # Set a default build type if none was specified
@@ -25,10 +26,31 @@ endif()
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Coverage
+if (do_coverage)
+    set(coverage_cxxflags "-g -O0 -fprofile-arcs -ftest-coverage")
+    set(coverage_ldflags "-lgcov --coverage")
+
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${coverage_cxxflags}")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${coverage_ldflags}")
+endif()
+
 # Dependencies
 ## Boost
 find_package(Boost 1.48 REQUIRED COMPONENTS regex locale)
 include_directories(${Boost_INCLUDE_DIR})
+
+## Intervalset
+find_package(intervalset REQUIRED)
+include_directories(${INTERVALSET_INCLUDE_DIR})
+
+## loguru
+find_package(loguru REQUIRED)
+include_directories(${LOGURU_INCLUDE_DIR})
+
+## pthread (for loguru)
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
 
 ## GMP
 find_package(GMP REQUIRED)
@@ -64,6 +86,10 @@ add_executable(batsched ${batsched_SRC})
 target_link_libraries(batsched ${GMP_LIBRARIES}
                       ${Boost_REGEX_LIBRARY_DEBUG}
                       ${Boost_LOCALE_LIBRARY_DEBUG}
+                      ${INTERVALSET_LIBRARY}
+                      ${LOGURU_LIBRARIES}
+                      Threads::Threads
+                      ${CMAKE_DL_LIBS}
                       ${REDOX_LIBRARY}
                       ${LIBEV_LIBRARY}
                       ${HIREDIS_LIBRARY}
@@ -96,7 +122,7 @@ endif()
 ####################
 # Batsched version #
 ####################
-set(default_batsched_version "v1.2.1")
+set(default_batsched_version "v1.3.0")
 include(GetGitRevisionDescription)
 git_describe(batsched_version)
 message(STATUS "Batsched version from git: ${batsched_version}")

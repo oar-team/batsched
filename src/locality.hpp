@@ -1,56 +1,56 @@
 #pragma once
 
-#include "machine_range.hpp"
+#include <intervalset.hpp>
 struct Job;
 
 class ResourceSelector
 {
 public:
-    ResourceSelector() {}
-    virtual ~ResourceSelector() {}
+    ResourceSelector();
+    virtual ~ResourceSelector();
 
-    virtual bool fit(const Job * job, const MachineRange & available, MachineRange & allocated) = 0;
-    virtual void select_resources_to_sedate(int nb_resources, const MachineRange & available, const MachineRange & potentially_sedated, MachineRange & to_sedate) = 0;
-    virtual void select_resources_to_awaken(int nb_resources, const MachineRange & available, const MachineRange & potentially_awaken, MachineRange & to_awaken) = 0;
-    virtual void select_resources_to_awaken_to_make_job_fit(const Job * job, const MachineRange & available, const MachineRange & potentially_awaken, MachineRange & to_awaken) = 0;
+    virtual bool fit(const Job * job, const IntervalSet & available, IntervalSet & allocated) = 0;
+    virtual void select_resources_to_sedate(int nb_resources, const IntervalSet & available, const IntervalSet & potentially_sedated, IntervalSet & to_sedate) = 0;
+    virtual void select_resources_to_awaken(int nb_resources, const IntervalSet & available, const IntervalSet & potentially_awaken, IntervalSet & to_awaken) = 0;
+    virtual void select_resources_to_awaken_to_make_job_fit(const Job * job, const IntervalSet & available, const IntervalSet & potentially_awaken, IntervalSet & to_awaken) = 0;
 };
 
 class BasicResourceSelector : public ResourceSelector
 {
 public:
-    BasicResourceSelector() {}
-    ~BasicResourceSelector() {}
+    BasicResourceSelector();
+    ~BasicResourceSelector();
 
-    bool fit(const Job * job, const MachineRange & available, MachineRange & allocated);
-    void select_resources_to_sedate(int nb_resources, const MachineRange & available, const MachineRange & potentially_sedated, MachineRange & to_sedate);
-    void select_resources_to_awaken(int nb_resources, const MachineRange & available, const MachineRange & potentially_awaken, MachineRange & to_awaken);
-    void select_resources_to_awaken_to_make_job_fit(const Job * job, const MachineRange & available, const MachineRange & potentially_awaken, MachineRange & to_awaken);
+    bool fit(const Job * job, const IntervalSet & available, IntervalSet & allocated);
+    void select_resources_to_sedate(int nb_resources, const IntervalSet & available, const IntervalSet & potentially_sedated, IntervalSet & to_sedate);
+    void select_resources_to_awaken(int nb_resources, const IntervalSet & available, const IntervalSet & potentially_awaken, IntervalSet & to_awaken);
+    void select_resources_to_awaken_to_make_job_fit(const Job * job, const IntervalSet & available, const IntervalSet & potentially_awaken, IntervalSet & to_awaken);
 };
 
 class ContiguousResourceSelector : public ResourceSelector
 {
 public:
-    ContiguousResourceSelector() {}
-    ~ContiguousResourceSelector() {}
+    ContiguousResourceSelector();
+    ~ContiguousResourceSelector();
 
-    bool fit(const Job * job, const MachineRange & available, MachineRange & allocated);
-    void select_resources_to_sedate(int nb_resources, const MachineRange & available, const MachineRange & potentially_sedated, MachineRange & to_sedate);
-    void select_resources_to_awaken(int nb_resources, const MachineRange & available, const MachineRange & potentially_awaken, MachineRange & to_awaken);
-    void select_resources_to_awaken_to_make_job_fit(const Job * job, const MachineRange & available, const MachineRange & potentially_awaken, MachineRange & to_awaken);
+    bool fit(const Job * job, const IntervalSet & available, IntervalSet & allocated);
+    void select_resources_to_sedate(int nb_resources, const IntervalSet & available, const IntervalSet & potentially_sedated, IntervalSet & to_sedate);
+    void select_resources_to_awaken(int nb_resources, const IntervalSet & available, const IntervalSet & potentially_awaken, IntervalSet & to_awaken);
+    void select_resources_to_awaken_to_make_job_fit(const Job * job, const IntervalSet & available, const IntervalSet & potentially_awaken, IntervalSet & to_awaken);
 };
 
 class LimitedRangeResourceSelector : public ResourceSelector
 {
 public:
-    LimitedRangeResourceSelector() {}
-    LimitedRangeResourceSelector(const MachineRange & limited_range) : _limited_range(limited_range) {}
-    ~LimitedRangeResourceSelector() {}
+    LimitedRangeResourceSelector();
+    LimitedRangeResourceSelector(const IntervalSet & limited_range);
+    ~LimitedRangeResourceSelector();
 
-    bool fit(const Job *job, const MachineRange &available, MachineRange &allocated);
-    void select_resources_to_sedate(int nb_resources, const MachineRange & available, const MachineRange & potentially_sedated, MachineRange & to_sedate);
-    void select_resources_to_awaken(int nb_resources, const MachineRange & available, const MachineRange & potentially_awaken, MachineRange & to_awaken);
-    void select_resources_to_awaken_to_make_job_fit(const Job * job, const MachineRange & available, const MachineRange & potentially_awaken, MachineRange & to_awaken);
+    bool fit(const Job *job, const IntervalSet &available, IntervalSet &allocated);
+    void select_resources_to_sedate(int nb_resources, const IntervalSet & available, const IntervalSet & potentially_sedated, IntervalSet & to_sedate);
+    void select_resources_to_awaken(int nb_resources, const IntervalSet & available, const IntervalSet & potentially_awaken, IntervalSet & to_awaken);
+    void select_resources_to_awaken_to_make_job_fit(const Job * job, const IntervalSet & available, const IntervalSet & potentially_awaken, IntervalSet & to_awaken);
 
 public:
-    MachineRange _limited_range;
+    IntervalSet _limited_range;
 };
