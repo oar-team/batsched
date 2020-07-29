@@ -33,6 +33,7 @@
 #include "algo/energy_bf_machine_subpart_sleeper.hpp"
 #include "algo/energy_watcher.hpp"
 #include "algo/filler.hpp"
+#include "algo/fcfs.hpp"
 #include "algo/fcfs_fast.hpp"
 #include "algo/killer.hpp"
 #include "algo/killer2.hpp"
@@ -78,7 +79,7 @@ int main(int argc, char ** argv)
                                       "energy_bf", "energy_bf_dicho", "energy_bf_idle_sleeper",
                                       "energy_bf_monitoring",
                                       "energy_bf_monitoring_inertial", "energy_bf_subpart_sleeper",
-                                      "energy_watcher", "fcfs_fast",
+                                      "energy_watcher", "fcfs", "fcfs_fast",
                                       "filler", "killer", "killer2", "random", "rejecter",
                                       "sequencer", "sleeper", "submitter", "waiting_time_estimator"};
     const set<string> policies_set = {"basic", "contiguous"};
@@ -138,7 +139,7 @@ int main(int argc, char ** argv)
                                             % flag_verbosity_level.Get()
                                             % verbosity_levels_string));
     }
-    catch(args::Help)
+    catch(args::Help&)
     {
         parser.helpParams.addDefault = true;
         printf("%s", parser.Help().c_str());
@@ -149,12 +150,12 @@ int main(int argc, char ** argv)
         printf("%s", e.what());
         return 0;
     }
-    catch(args::ParseError e)
+    catch(args::ParseError & e)
     {
         printf("%s\n", e.what());
         return 1;
     }
-    catch(args::ValidationError e)
+    catch(args::ValidationError & e)
     {
         printf("%s\n", e.what());
         return 1;
@@ -284,6 +285,8 @@ int main(int argc, char ** argv)
             algo = new EnergyBackfillingMachineSubpartSleeper(&w, &decision, queue, selector, rjms_delay, &json_doc_variant_options);
         else if (scheduling_variant == "energy_watcher")
             algo = new EnergyWatcher(&w, &decision, queue, selector, rjms_delay, &json_doc_variant_options);
+        else if (scheduling_variant == "fcfs")
+            algo = new FCFS(&w, &decision, queue, selector, rjms_delay, &json_doc_variant_options);
         else if (scheduling_variant == "fcfs_fast")
             algo = new FCFSFast(&w, &decision, queue, selector, rjms_delay, &json_doc_variant_options);
         else if (scheduling_variant == "killer")
@@ -501,6 +504,20 @@ void run(Network & n, ISchedulingAlgorithm * algo, SchedulingDecision & d,
                 if (notify_type == "no_more_static_job_to_submit")
                 {
                     algo->on_no_more_static_job_to_submit_received(current_date);
+                }
+                else if (notify_type == "no_more_external_event_to_occur")
+                {
+                    algo->on_no_more_external_event_to_occur(current_date);
+                }
+                else if (notify_type == "event_machine_available")
+                {
+                    IntervalSet resources = IntervalSet::from_string_hyphen(event_data["resources"].GetString(), " ");
+                    algo->on_machine_available_notify_event(current_date, resources);
+                }
+                else if (notify_type == "event_machine_unavailable")
+                {
+                    IntervalSet resources = IntervalSet::from_string_hyphen(event_data["resources"].GetString(), " ");
+                    algo->on_machine_unavailable_notify_event(current_date, resources);
                 }
                 else
                 {
