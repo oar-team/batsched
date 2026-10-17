@@ -59,6 +59,53 @@ void GreenWindowScheduling::schedule_runnable_heads(Rational date)
         if (_priority_reservation != nullptr)
             return;
     }
+
+    if (has_pending_displacement() && _heads_behind_displacement == HeadsBehindDisplacement::Easy)
+        schedule_heads_behind_displacement(date);
+}
+
+// Plain EASY for the jobs queued behind the displaced one, without the score:
+// they start in queue order while they fit, and the first one that does not
+// fit keeps a reservation, so the backfill that follows cannot delay it.
+void GreenWindowScheduling::schedule_heads_behind_displacement(Rational date)
+{
+    std::list<SortableJob *>::const_iterator job_it = _queue->begin();
+
+    while (job_it != _queue->end())
+    {
+        // Advance first: starting the job removes it from the queue.
+        const Job *job = (*job_it++)->job;
+        if (job == _reserved_job)
+            continue;
+
+        if (!try_start_immediately(job, date))
+        {
+            reserve_earliest_start_around_hold(job);
+            return;
+        }
+    }
+}
+
+// The held nodes stay idle until the displaced start (see find_exact_allocation),
+// so the reservation either avoids them or begins once the displaced job runs.
+// A reservation on them before that start would not protect the job, because it
+// could not start there.
+void GreenWindowScheduling::reserve_earliest_start_around_hold(const Job *job)
+{
+    IntervalSet outside_hold;
+    outside_hold.insert(IntervalSet::ClosedInterval(0, _nb_machines - 1));
+    outside_hold -= _reserved_machines;
+    LimitedRangeResourceSelector outside_hold_selector(outside_hold);
+
+    const bool assert_insertion_successful = false;
+    Schedule::JobAlloc alloc = _schedule.add_job_first_fit(job, &outside_hold_selector, assert_insertion_successful);
+    bool starts_before_displaced_job = alloc.has_been_inserted && alloc.begin < _reserved_start;
+    if (!starts_before_displaced_job)
+    {
+        _schedule.remove_job_if_exists(job);
+        _schedule.add_job_first_fit_after_time(job, _reserved_start, _selector);
+    }
+    _priority_reservation = job;
 }
 
 void GreenWindowScheduling::schedule_priority_job(Rational date)
@@ -89,19 +136,21 @@ void GreenWindowScheduling::backfill_waiting_jobs(Rational date)
     {
         const Job *job = (*job_it++)->job;
         if (job != _reserved_job && job != _priority_reservation)
-            try_backfill_job(job, date);
+            try_start_immediately(job, date);
     }
 }
 
-void GreenWindowScheduling::try_backfill_job(const Job *job, Rational date)
+// Starts the job at date if it fits there for its whole walltime, outside the held nodes.
+bool GreenWindowScheduling::try_start_immediately(const Job *job, Rational date)
 {
     WindowCandidate candidate;
     candidate.begin = date;
     candidate.end = date + job->walltime;
     if (!find_exact_allocation(job, candidate.begin, candidate.end, candidate.machines))
-        return;
+        return false;
     Schedule::JobAlloc alloc = insert_at_scored_window(job, candidate);
     start_job(job, alloc.used_machines, date);
+    return true;
 }
 
 void GreenWindowScheduling::update_schedule_present(Rational date)

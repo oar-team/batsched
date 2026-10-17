@@ -38,6 +38,13 @@ private:
         IntervalSet machines;
     };
 
+    // What the jobs queued behind a pending displacement do.
+    enum class HeadsBehindDisplacement
+    {
+        Backfill, // Only the greedy backfill, with no reservation (the original behavior).
+        Easy, // Plain EASY without the score: start in queue order, reserve the first blocked one.
+    };
+
     static std::string get_required_string_option(rapidjson::Document *variant_options, const char *option_name);
     static std::string get_intensity_trace_option(rapidjson::Document *variant_options);
     static std::string get_signal_property_option(rapidjson::Document *variant_options);
@@ -47,6 +54,7 @@ private:
     static bool get_optional_bool_option(
         rapidjson::Document *variant_options, const char *option_name, bool default_value);
     static double get_min_relative_gain_option(rapidjson::Document *variant_options);
+    static HeadsBehindDisplacement get_heads_behind_displacement_option(rapidjson::Document *variant_options);
 
     Rational configured_window_step(rapidjson::Document *variant_options) const;
     void log_window_choice(const Job *job, Rational date, Rational t0, const WindowCandidate &now,
@@ -55,8 +63,10 @@ private:
     void enqueue_released_jobs(double date, SortableJobOrder::UpdateInformation *update_info);
     void clear_priority_reservation();
     void schedule_runnable_heads(Rational date);
+    void schedule_heads_behind_displacement(Rational date);
+    void reserve_earliest_start_around_hold(const Job *job);
     void backfill_waiting_jobs(Rational date);
-    void try_backfill_job(const Job *job, Rational date);
+    bool try_start_immediately(const Job *job, Rational date);
     void update_schedule_present(Rational date);
     void execute_reserved_job_if_ready(Rational date);
     void schedule_priority_job(Rational date);
@@ -99,6 +109,8 @@ private:
 
     // Fraction in [0, 1) by which a window must cut the score of starting now to displace the job.
     double _min_relative_gain = 0.0;
+
+    HeadsBehindDisplacement _heads_behind_displacement = HeadsBehindDisplacement::Backfill;
 
     // b46671e restarted dm on every search. Retain first runnable time until dispatch.
     std::map<const Job *, Rational> _displacement_origins;

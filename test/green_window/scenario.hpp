@@ -84,15 +84,16 @@ struct GreenWindowSchedulingTestAccess
 class GreenWindowScenario
 {
 public:
-    explicit GreenWindowScenario(
-        int machines = 4, std::vector<double> blocks = { 100 }, double horizon = 20, double min_relative_gain = 0)
+    explicit GreenWindowScenario(int machines = 4, std::vector<double> blocks = { 100 }, double horizon = 20,
+        double min_relative_gain = 0, const std::string &heads_behind_displacement = "backfill")
         : queue(&order)
         , trace(new FakeGreenWindowIntensity(std::move(blocks)))
     {
         options.Parse(R"({"intensity_trace":"fake.csv","intensity_zone":"TESTZONE","signal":"carbon",
-            "planning_horizon_seconds":20,"min_relative_gain":0})");
+            "planning_horizon_seconds":20,"min_relative_gain":0,"heads_behind_displacement":"backfill"})");
         options["planning_horizon_seconds"].SetDouble(horizon);
         options["min_relative_gain"].SetDouble(min_relative_gain);
+        options["heads_behind_displacement"].SetString(heads_behind_displacement.c_str(), options.GetAllocator());
         scheduler.reset(new GreenWindowScheduling(
             &workload, &decision, &queue, &selector, 0, &options, std::unique_ptr<GreenWindowIntensity>(trace)));
         scheduler->set_nb_machines(machines);
@@ -177,3 +178,4 @@ public:
 void test_displacement_regressions();
 void test_window_search_regressions();
 void test_minimum_gain_regressions();
+void test_heads_behind_displacement_regressions();

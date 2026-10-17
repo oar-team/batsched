@@ -36,6 +36,7 @@ GreenWindowScheduling::GreenWindowScheduling(Workload *workload, SchedulingDecis
     , _computing_watts(get_optional_positive_double_option(variant_options, "computing_watts", DEFAULT_COMPUTING_WATTS))
     , _idle_watts(get_optional_positive_double_option(variant_options, "idle_watts", DEFAULT_IDLE_WATTS))
     , _min_relative_gain(get_min_relative_gain_option(variant_options))
+    , _heads_behind_displacement(get_heads_behind_displacement_option(variant_options))
     , _green_window_scheduling_debug(get_optional_bool_option(variant_options, "green_window_scheduling_debug", false))
 {
     PPK_ASSERT_ERROR(_intensity != nullptr, "Invalid intensity source: got null, expected GreenWindowIntensity");
@@ -140,6 +141,25 @@ double GreenWindowScheduling::get_min_relative_gain_option(rapidjson::Document *
     PPK_ASSERT_ERROR(
         value >= 0.0 && value < 1.0, "Invalid options: '%s' should be in [0, 1) (got %g)", option_name, value);
     return value;
+}
+
+// Optional, "backfill" when absent, which keeps the original behavior.
+GreenWindowScheduling::HeadsBehindDisplacement GreenWindowScheduling::get_heads_behind_displacement_option(
+    rapidjson::Document *variant_options)
+{
+    const char *option_name = "heads_behind_displacement";
+    if (!variant_options->HasMember(option_name))
+        return HeadsBehindDisplacement::Backfill;
+
+    std::string value = get_required_string_option(variant_options, option_name);
+    if (value == "backfill")
+        return HeadsBehindDisplacement::Backfill;
+    if (value == "easy")
+        return HeadsBehindDisplacement::Easy;
+
+    PPK_ASSERT_ERROR(false, "Invalid options: '%s' should be either 'backfill' or 'easy' (got '%s')", option_name,
+        value.c_str());
+    return HeadsBehindDisplacement::Backfill;
 }
 
 void GreenWindowScheduling::log_window_choice(const Job *job, Rational date, Rational t0, const WindowCandidate &now,
