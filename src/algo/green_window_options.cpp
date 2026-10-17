@@ -35,6 +35,7 @@ GreenWindowScheduling::GreenWindowScheduling(Workload *workload, SchedulingDecis
     , _planning_horizon(get_required_positive_double_option(variant_options, "planning_horizon_seconds"))
     , _computing_watts(get_optional_positive_double_option(variant_options, "computing_watts", DEFAULT_COMPUTING_WATTS))
     , _idle_watts(get_optional_positive_double_option(variant_options, "idle_watts", DEFAULT_IDLE_WATTS))
+    , _min_relative_gain(get_min_relative_gain_option(variant_options))
     , _green_window_scheduling_debug(get_optional_bool_option(variant_options, "green_window_scheduling_debug", false))
 {
     PPK_ASSERT_ERROR(_intensity != nullptr, "Invalid intensity source: got null, expected GreenWindowIntensity");
@@ -125,8 +126,24 @@ bool GreenWindowScheduling::get_optional_bool_option(
     return (*variant_options)[option_name].GetBool();
 }
 
-void GreenWindowScheduling::log_window_choice(
-    const Job *job, Rational date, Rational t0, const WindowCandidate &now, const WindowCandidate &best) const
+// Optional, 0 when absent. Unlike the other numeric options, 0 is valid: it keeps the original behavior.
+double GreenWindowScheduling::get_min_relative_gain_option(rapidjson::Document *variant_options)
+{
+    const char *option_name = "min_relative_gain";
+    if (!variant_options->HasMember(option_name))
+        return 0.0;
+
+    PPK_ASSERT_ERROR(
+        (*variant_options)[option_name].IsNumber(), "Invalid options: '%s' should be a number", option_name);
+
+    double value = (*variant_options)[option_name].GetDouble();
+    PPK_ASSERT_ERROR(
+        value >= 0.0 && value < 1.0, "Invalid options: '%s' should be in [0, 1) (got %g)", option_name, value);
+    return value;
+}
+
+void GreenWindowScheduling::log_window_choice(const Job *job, Rational date, Rational t0, const WindowCandidate &now,
+    const WindowCandidate &lowest, const WindowCandidate &chosen) const
 {
     if (!_green_window_scheduling_debug)
         return;
@@ -139,15 +156,22 @@ void GreenWindowScheduling::log_window_choice(
     
     record.AddMember("date", (double)date, allocator);
     record.AddMember("t0", (double)t0, allocator);
-    record.AddMember("begin", (double)best.begin, allocator);
-    record.AddMember("end", (double)best.end, allocator);
-    
-    record.AddMember("impact", best.score, allocator);
+    record.AddMember("begin", (double)chosen.begin, allocator);
+    record.AddMember("end", (double)chosen.end, allocator);
+
+    record.AddMember("impact", chosen.score, allocator);
     // now_impact is the score of starting at date, absent when that start is infeasible.
     if (now.found)
         record.AddMember("now_impact", now.score, allocator);
     
-    record.AddMember("machines", rapidjson::Value(best.machines.to_string_brackets().c_str(), allocator), allocator);
+    // The lowest-score window, present only when the minimum gain kept the job at its immediate start.
+    if (chosen.begin != lowest.begin)
+    {
+        record.AddMember("rejected_begin", (double)lowest.begin, allocator);
+        record.AddMember("rejected_impact", lowest.score, allocator);
+    }
+
+    record.AddMember("machines", rapidjson::Value(chosen.machines.to_string_brackets().c_str(), allocator), allocator);
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
     record.Accept(writer);

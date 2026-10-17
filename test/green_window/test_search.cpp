@@ -1,12 +1,6 @@
 #include "scenario.hpp"
 
 #include <cmath>
-#include <loguru.hpp>
-
-static void capture_log(void *records, const loguru::Message &message)
-{
-    static_cast<std::vector<std::string> *>(records)->push_back(message.message);
-}
 
 static void logs_decision_origin_and_immediate_score()
 {

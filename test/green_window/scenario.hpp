@@ -3,6 +3,7 @@
 #include "algo/green_window_scheduling.hpp"
 
 #include <algorithm>
+#include <loguru.hpp>
 #include <stdexcept>
 #include <vector>
 
@@ -10,6 +11,12 @@ inline void require_green_window(bool condition, const std::string &expectation)
 {
     if (!condition)
         throw std::runtime_error(expectation);
+}
+
+/** Collect log lines into a std::vector<std::string>. Example: loguru::add_callback("id", capture_log, &lines, ...). */
+inline void capture_log(void *records, const loguru::Message &message)
+{
+    static_cast<std::vector<std::string> *>(records)->push_back(message.message);
 }
 
 class FakeGreenWindowIntensity : public GreenWindowIntensity
@@ -77,13 +84,15 @@ struct GreenWindowSchedulingTestAccess
 class GreenWindowScenario
 {
 public:
-    explicit GreenWindowScenario(int machines = 4, std::vector<double> blocks = { 100 }, double horizon = 20)
+    explicit GreenWindowScenario(
+        int machines = 4, std::vector<double> blocks = { 100 }, double horizon = 20, double min_relative_gain = 0)
         : queue(&order)
         , trace(new FakeGreenWindowIntensity(std::move(blocks)))
     {
         options.Parse(R"({"intensity_trace":"fake.csv","intensity_zone":"TESTZONE","signal":"carbon",
-            "planning_horizon_seconds":20})");
+            "planning_horizon_seconds":20,"min_relative_gain":0})");
         options["planning_horizon_seconds"].SetDouble(horizon);
+        options["min_relative_gain"].SetDouble(min_relative_gain);
         scheduler.reset(new GreenWindowScheduling(
             &workload, &decision, &queue, &selector, 0, &options, std::unique_ptr<GreenWindowIntensity>(trace)));
         scheduler->set_nb_machines(machines);
@@ -167,3 +176,4 @@ public:
 
 void test_displacement_regressions();
 void test_window_search_regressions();
+void test_minimum_gain_regressions();

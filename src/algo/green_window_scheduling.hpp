@@ -46,10 +46,11 @@ private:
         rapidjson::Document *variant_options, const char *option_name, double default_value);
     static bool get_optional_bool_option(
         rapidjson::Document *variant_options, const char *option_name, bool default_value);
+    static double get_min_relative_gain_option(rapidjson::Document *variant_options);
 
     Rational configured_window_step(rapidjson::Document *variant_options) const;
-    void log_window_choice(
-        const Job *job, Rational date, Rational t0, const WindowCandidate &now, const WindowCandidate &best) const;
+    void log_window_choice(const Job *job, Rational date, Rational t0, const WindowCandidate &now,
+        const WindowCandidate &lowest, const WindowCandidate &chosen) const;
     void release_completed_allocations();
     void enqueue_released_jobs(double date, SortableJobOrder::UpdateInformation *update_info);
     void clear_priority_reservation();
@@ -67,6 +68,9 @@ private:
     void clear_reservation();
 
     WindowCandidate find_best_window(const Job *job, Rational date);
+    WindowCandidate find_lowest_score_window(
+        const Job *job, Rational t0, Rational date, const WindowCandidate &now) const;
+    WindowCandidate apply_minimum_gain(const WindowCandidate &now, const WindowCandidate &lowest) const;
     Rational first_grid_point_after(Rational date) const;
     void consider_window(const Job *job, Rational t0, Rational begin, WindowCandidate &best) const;
     bool find_exact_allocation(const Job *job, Rational begin, Rational end, IntervalSet &machines) const;
@@ -92,6 +96,9 @@ private:
 
     double _computing_watts = 0.0;
     double _idle_watts = 0.0;
+
+    // Fraction in [0, 1) by which a window must cut the score of starting now to displace the job.
+    double _min_relative_gain = 0.0;
 
     // b46671e restarted dm on every search. Retain first runnable time until dispatch.
     std::map<const Job *, Rational> _displacement_origins;
