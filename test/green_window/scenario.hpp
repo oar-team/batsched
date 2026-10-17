@@ -51,6 +51,11 @@ struct GreenWindowSchedulingTestAccess
         return scheduler.find_best_window(job, date).begin;
     }
 
+    static void enable_debug_log(GreenWindowScheduling &scheduler)
+    {
+        scheduler._green_window_scheduling_debug = true;
+    }
+
     static void reconsider_displacement(GreenWindowScheduling &scheduler)
     {
         scheduler._schedule.remove_job(scheduler._reserved_job);

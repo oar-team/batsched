@@ -48,7 +48,8 @@ private:
         rapidjson::Document *variant_options, const char *option_name, bool default_value);
 
     Rational configured_window_step(rapidjson::Document *variant_options) const;
-    void log_window_choice(const Job *job, const WindowCandidate &candidate) const;
+    void log_window_choice(
+        const Job *job, Rational date, Rational t0, const WindowCandidate &now, const WindowCandidate &best) const;
     void release_completed_allocations();
     void enqueue_released_jobs(double date, SortableJobOrder::UpdateInformation *update_info);
     void clear_priority_reservation();

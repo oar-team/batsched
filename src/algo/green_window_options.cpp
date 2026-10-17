@@ -125,19 +125,29 @@ bool GreenWindowScheduling::get_optional_bool_option(
     return (*variant_options)[option_name].GetBool();
 }
 
-void GreenWindowScheduling::log_window_choice(const Job *job, const WindowCandidate &candidate) const
+void GreenWindowScheduling::log_window_choice(
+    const Job *job, Rational date, Rational t0, const WindowCandidate &now, const WindowCandidate &best) const
 {
     if (!_green_window_scheduling_debug)
         return;
+
     rapidjson::Document record(rapidjson::kObjectType);
     rapidjson::Document::AllocatorType &allocator = record.GetAllocator();
+
     record.AddMember("event", "green_window_selected", allocator);
     record.AddMember("job", rapidjson::Value(job->id.c_str(), allocator), allocator);
-    record.AddMember("begin", (double)candidate.begin, allocator);
-    record.AddMember("end", (double)candidate.end, allocator);
-    record.AddMember("impact", candidate.score, allocator);
-    record.AddMember(
-        "machines", rapidjson::Value(candidate.machines.to_string_brackets().c_str(), allocator), allocator);
+    
+    record.AddMember("date", (double)date, allocator);
+    record.AddMember("t0", (double)t0, allocator);
+    record.AddMember("begin", (double)best.begin, allocator);
+    record.AddMember("end", (double)best.end, allocator);
+    
+    record.AddMember("impact", best.score, allocator);
+    // now_impact is the score of starting at date, absent when that start is infeasible.
+    if (now.found)
+        record.AddMember("now_impact", now.score, allocator);
+    
+    record.AddMember("machines", rapidjson::Value(best.machines.to_string_brackets().c_str(), allocator), allocator);
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
     record.Accept(writer);

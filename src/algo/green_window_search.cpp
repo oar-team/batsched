@@ -17,6 +17,7 @@ GreenWindowScheduling::WindowCandidate GreenWindowScheduling::find_best_window(c
     // The current runnable date remains a candidate off-grid and at an expired deadline.
     // b46671e renewed the horizon here, allowing successive searches to drift.
     consider_window(job, t0, date, best);
+    const WindowCandidate now = best;
     // Then every later grid point within the maximum displacement. dm bounds
     // where the job may start, not where it must finish, so its window can
     // run past horizon_end.
@@ -24,7 +25,7 @@ GreenWindowScheduling::WindowCandidate GreenWindowScheduling::find_best_window(c
     {
         consider_window(job, t0, begin, best);
     }
-    log_window_choice(job, best);
+    log_window_choice(job, date, t0, now, best);
     return best;
 }
 
