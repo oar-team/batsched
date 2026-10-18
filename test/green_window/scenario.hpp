@@ -65,8 +65,9 @@ struct GreenWindowSchedulingTestAccess
 
     static void reconsider_displacement(GreenWindowScheduling &scheduler)
     {
-        scheduler._schedule.remove_job(scheduler._reserved_job);
-        scheduler.clear_reservation();
+        require_green_window(scheduler._displacements.size() == 1, "Expected exactly one displacement to reconsider");
+        scheduler._schedule.remove_job(scheduler._displacements.front().job);
+        scheduler._displacements.clear();
     }
 
     static bool origin_retained(const GreenWindowScheduling &scheduler, const Job *job)

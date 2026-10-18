@@ -90,9 +90,8 @@ bool GreenWindowScheduling::find_exact_allocation(
     const Job *job, Rational begin, Rational end, IntervalSet &machines) const
 {
     IntervalSet available_machines = available_machines_during_period(begin, end);
-    // Keep only the displaced allocation idle, including jobs that finish before its start.
-    if (has_pending_displacement() && begin < _reserved_start)
-        available_machines -= _reserved_machines;
+    // Keep the displaced allocations idle, including for jobs that finish before their start.
+    available_machines -= machines_held_at(begin);
     return _selector->fit(job, available_machines, machines);
 }
 

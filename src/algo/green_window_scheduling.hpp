@@ -7,6 +7,7 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <vector>
 
 class GreenWindowScheduling : public EasyBackfilling
 {
@@ -38,6 +39,14 @@ private:
         IntervalSet machines;
     };
 
+    // A job waiting for its scored window. Its machines stay idle until start.
+    struct Displacement
+    {
+        const Job *job = nullptr;
+        Rational start = 0;
+        IntervalSet machines;
+    };
+
     // What the jobs queued behind a pending displacement do.
     enum class HeadsBehindDisplacement
     {
@@ -64,18 +73,21 @@ private:
     void clear_priority_reservation();
     void schedule_runnable_heads(Rational date);
     void schedule_heads_behind_displacement(Rational date);
-    void reserve_earliest_start_around_hold(const Job *job);
+    void reserve_earliest_start_around_holds(const Job *job, Rational date);
+    bool try_reserve_before(const Job *job, Rational after, Rational before);
+    std::vector<Rational> hold_phase_boundaries(Rational date) const;
     void backfill_waiting_jobs(Rational date);
     bool try_start_immediately(const Job *job, Rational date);
     void update_schedule_present(Rational date);
-    void execute_reserved_job_if_ready(Rational date);
+    void execute_displaced_jobs_due(Rational date);
     void schedule_priority_job(Rational date);
 
     bool has_pending_displacement() const;
+    bool is_displaced(const Job *job) const;
+    IntervalSet machines_held_at(Rational date) const;
     Schedule::JobAlloc insert_at_scored_window(const Job *job, const WindowCandidate &candidate);
     void start_job(const Job *job, const IntervalSet &machines, Rational date);
-    void hold_displaced_reservation(const Job *job, const Schedule::JobAlloc &alloc);
-    void clear_reservation();
+    void hold_displacement(const Job *job, const Schedule::JobAlloc &alloc);
 
     WindowCandidate find_best_window(const Job *job, Rational date);
     WindowCandidate find_lowest_score_window(
@@ -89,7 +101,7 @@ private:
     double compute_window_score(const Job *job, Rational t0, Rational begin, Rational end) const;
     double intensity_sum(Rational begin, Rational end) const;
 
-    void request_reservation_call(Rational date);
+    void request_displaced_start_calls(Rational date);
     void forget_requested_call_date(double date);
     bool is_call_date_already_requested(double date) const;
     static bool same_date(double left, double right);
@@ -115,9 +127,8 @@ private:
     // b46671e restarted dm on every search. Retain first runnable time until dispatch.
     std::map<const Job *, Rational> _displacement_origins;
     const Job *_priority_reservation = nullptr;
-    const Job *_reserved_job = nullptr;
-    Rational _reserved_start = 0;
-    IntervalSet _reserved_machines;
+    // Only the queue head is displaced, and only when none is pending, so this holds at most one.
+    std::vector<Displacement> _displacements;
 
     bool _green_window_scheduling_debug = false;
     std::set<double> _requested_call_dates;
