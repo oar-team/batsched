@@ -12,7 +12,7 @@
 class GreenWindowScheduling : public EasyBackfilling
 {
 public:
-    /** Preserve EASY backfilling while shifting one runnable head. Example: construct with FCFSOrder. */
+    /** Preserve EASY backfilling while shifting runnable heads to greener windows. Example: construct with FCFSOrder. */
     GreenWindowScheduling(Workload *workload, SchedulingDecision *decision, Queue *queue, ResourceSelector *selector,
         double rjms_delay, rapidjson::Document *variant_options);
     /** Inject the trace source for deterministic scheduling. Example: pass a FakeGreenWindowIntensity. */
@@ -52,6 +52,7 @@ private:
     {
         Backfill, // Only the greedy backfill, with no reservation (the original behavior).
         Easy, // Plain EASY without the score: start in queue order, reserve the first blocked one.
+        Score, // As in Easy, but each job that fits is scored like the queue head and may be displaced too.
     };
 
     static std::string get_required_string_option(rapidjson::Document *variant_options, const char *option_name);
@@ -78,9 +79,11 @@ private:
     std::vector<Rational> hold_phase_boundaries(Rational date) const;
     void backfill_waiting_jobs(Rational date);
     bool try_start_immediately(const Job *job, Rational date);
+    bool fits_immediately(const Job *job, Rational date) const;
     void update_schedule_present(Rational date);
     void execute_displaced_jobs_due(Rational date);
     void schedule_priority_job(Rational date);
+    void schedule_at_scored_window(const Job *job, Rational date);
 
     bool has_pending_displacement() const;
     bool is_displaced(const Job *job) const;
@@ -127,7 +130,8 @@ private:
     // b46671e restarted dm on every search. Retain first runnable time until dispatch.
     std::map<const Job *, Rational> _displacement_origins;
     const Job *_priority_reservation = nullptr;
-    // Only the queue head is displaced, and only when none is pending, so this holds at most one.
+    // In the backfill and easy modes only the queue head is displaced, and only when none is
+    // pending, so this holds at most one. The score mode can also displace the jobs behind it.
     std::vector<Displacement> _displacements;
 
     bool _green_window_scheduling_debug = false;

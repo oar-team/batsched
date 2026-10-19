@@ -60,13 +60,15 @@ void GreenWindowScheduling::schedule_runnable_heads(Rational date)
             return;
     }
 
-    if (has_pending_displacement() && _heads_behind_displacement == HeadsBehindDisplacement::Easy)
+    if (has_pending_displacement() && _heads_behind_displacement != HeadsBehindDisplacement::Backfill)
         schedule_heads_behind_displacement(date);
 }
 
-// Plain EASY for the jobs queued behind the displaced ones, without the score:
-// they start in queue order while they fit, and the first one that does not
-// fit keeps a reservation, so the backfill that follows cannot delay it.
+// EASY for the jobs queued behind the displaced ones: they are taken in queue
+// order while they fit, and the first one that does not fit keeps a
+// reservation, so the backfill that follows cannot delay it. In the easy mode
+// a job that fits starts at once. In the score mode it is scored like the queue
+// head, so it may be displaced as well.
 void GreenWindowScheduling::schedule_heads_behind_displacement(Rational date)
 {
     std::list<SortableJob *>::const_iterator job_it = _queue->begin();
@@ -78,11 +80,16 @@ void GreenWindowScheduling::schedule_heads_behind_displacement(Rational date)
         if (is_displaced(job))
             continue;
 
-        if (!try_start_immediately(job, date))
+        if (!fits_immediately(job, date))
         {
             reserve_earliest_start_around_holds(job, date);
             return;
         }
+
+        if (_heads_behind_displacement == HeadsBehindDisplacement::Score)
+            schedule_at_scored_window(job, date);
+        else
+            try_start_immediately(job, date);
     }
 }
 
@@ -150,6 +157,13 @@ void GreenWindowScheduling::schedule_priority_job(Rational date)
         return;
     }
     _schedule.remove_job(job);
+    schedule_at_scored_window(job, date);
+}
+
+// Start the job now or hold it for a later window, whichever the score picks.
+// The job must fit at date.
+void GreenWindowScheduling::schedule_at_scored_window(const Job *job, Rational date)
+{
     WindowCandidate candidate = find_best_window(job, date);
     PPK_ASSERT_ERROR(candidate.found, "Job '%s' fits at %g, expected a feasible window", job->id.c_str(), (double)date);
     Schedule::JobAlloc alloc = insert_at_scored_window(job, candidate);
@@ -182,6 +196,13 @@ bool GreenWindowScheduling::try_start_immediately(const Job *job, Rational date)
     Schedule::JobAlloc alloc = insert_at_scored_window(job, candidate);
     start_job(job, alloc.used_machines, date);
     return true;
+}
+
+// Whether the job fits at date for its whole walltime, outside the held nodes.
+bool GreenWindowScheduling::fits_immediately(const Job *job, Rational date) const
+{
+    IntervalSet machines;
+    return find_exact_allocation(job, date, date + job->walltime, machines);
 }
 
 void GreenWindowScheduling::update_schedule_present(Rational date)

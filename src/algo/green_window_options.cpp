@@ -156,8 +156,10 @@ GreenWindowScheduling::HeadsBehindDisplacement GreenWindowScheduling::get_heads_
         return HeadsBehindDisplacement::Backfill;
     if (value == "easy")
         return HeadsBehindDisplacement::Easy;
+    if (value == "score")
+        return HeadsBehindDisplacement::Score;
 
-    PPK_ASSERT_ERROR(false, "Invalid options: '%s' should be either 'backfill' or 'easy' (got '%s')", option_name,
+    PPK_ASSERT_ERROR(false, "Invalid options: '%s' should be 'backfill', 'easy' or 'score' (got '%s')", option_name,
         value.c_str());
     return HeadsBehindDisplacement::Backfill;
 }
