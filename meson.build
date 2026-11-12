@@ -1,7 +1,7 @@
 project('batsched', 'cpp',
     version: '1.4.0',
     license: 'free',
-    default_options: ['cpp_std=c++11'],
+    default_options: ['cpp_std=c++14'],
     meson_version: '>=0.40.0'
 )
 
@@ -30,6 +30,8 @@ src = [
     'src/algo/conservative_bf.hpp',
     'src/algo/crasher.cpp',
     'src/algo/crasher.hpp',
+    'src/algo/csv_parser.cpp',
+    'src/algo/csv_parser.hpp',
     'src/algo/easy_bf.cpp',
     'src/algo/easy_bf_fast.cpp',
     'src/algo/easy_bf_fast.hpp',
@@ -56,6 +58,13 @@ src = [
     'src/algo/fcfs.hpp',
     'src/algo/filler.cpp',
     'src/algo/filler.hpp',
+    'src/algo/greenfilling.cpp',
+    'src/algo/greenfilling.hpp',
+    'src/algo/green_window_scheduling.cpp',
+    'src/algo/green_window_scheduling.hpp',
+    'src/algo/green_window_intensity.hpp',
+    'src/algo/green_window_options.cpp',
+    'src/algo/green_window_search.cpp',
     'src/algo/killer2.cpp',
     'src/algo/killer2.hpp',
     'src/algo/killer.cpp',
@@ -104,3 +113,33 @@ batsched = executable('batsched', src,
     cpp_args: '-DBATSCHED_VERSION=@0@'.format(meson.project_version()),
     install: true
 )
+
+green_window_tests = executable('test-green-window',
+    'test/green_window/test_dispatch.cpp',
+    'test/green_window/test_displacement.cpp',
+    'test/green_window/test_search.cpp',
+    'test/green_window/test_minimum_gain.cpp',
+    'test/green_window/test_heads_behind_displacement.cpp',
+    'src/algo/green_window_scheduling.cpp',
+    'src/algo/green_window_options.cpp',
+    'src/algo/green_window_search.cpp',
+    'src/algo/easy_bf.cpp',
+    'src/algo/csv_parser.cpp',
+    'src/decision.cpp',
+    'src/isalgorithm.cpp',
+    'src/json_workload.cpp',
+    'src/locality.cpp',
+    'src/pempek_assert.cpp',
+    'src/protocol.cpp',
+    'src/queue.cpp',
+    'src/schedule.cpp',
+    include_directories: include_dir,
+    dependencies: batsched_deps
+)
+test('green-window', green_window_tests)
+
+csv_parser_tests = executable('test-csv-parser',
+    'test/test_csv_parser.cpp', 'src/algo/csv_parser.cpp',
+    include_directories: include_directories('src/algo')
+)
+test('csv-parser', csv_parser_tests, args: [join_paths(meson.current_build_dir(), 'csv-parser-test.csv')])

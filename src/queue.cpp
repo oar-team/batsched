@@ -8,6 +8,12 @@
 
 using namespace std;
 
+double COMPARISON_EPSILON = 1e-9;
+bool areEssentiallyEqual(double d1, double d2) 
+{
+    return abs(d1 - d2) < COMPARISON_EPSILON;
+}
+
 SortableJobOrder::UpdateInformation::UpdateInformation(Rational current_date) :
     current_date(current_date)
 {
@@ -15,6 +21,11 @@ SortableJobOrder::UpdateInformation::UpdateInformation(Rational current_date) :
 }
 
 SortableJobOrder::UpdateInformation::~UpdateInformation()
+{
+
+}
+
+SortableJobOrder::CompareInformation::~CompareInformation()
 {
 
 }
@@ -32,6 +43,11 @@ void SortableJob::update_slowdown(Rational current_date)
 void SortableJob::update_bounded_slowdown(Rational current_date, Rational execution_time_lower_bound)
 {
     bounded_slowdown = (current_date -  release_date) / execution_time_lower_bound;
+}
+
+void SortableJob::update_age(Rational current_date)
+{
+    age = current_date - job->submission_time;
 }
 
 
@@ -213,6 +229,126 @@ void DescendingWalltimeOrder::updateJob(SortableJob *job, const SortableJobOrder
     (void) job;
     (void) info;
 }
+
+
+AscendingEstimatedAreaOrder::~AscendingEstimatedAreaOrder() 
+{
+
+}
+
+bool AscendingEstimatedAreaOrder::compare(const SortableJob *j1, const SortableJob *j2, const SortableJobOrder::CompareInformation *info) const
+{
+    /* Based on SAF = estimated_processing_time * requested_resources described in https://hal.science/hal-02237895v1/document*/
+    (void) info;
+
+    Rational job_1_estimated_area = j1->job->walltime * j1->job->nb_requested_resources;
+    Rational job_2_estimated_area = j2->job->walltime * j2->job->nb_requested_resources;
+
+    if (job_1_estimated_area == job_2_estimated_area) 
+        return j1->release_date < j2->release_date;
+
+    return job_1_estimated_area < job_2_estimated_area;
+}
+
+void AscendingEstimatedAreaOrder::updateJob(SortableJob *job, const SortableJobOrder::UpdateInformation *info) const
+{
+    (void) job;
+    (void) info;
+}
+
+
+AscendingF1Order::~AscendingF1Order() 
+{
+
+}
+
+bool AscendingF1Order::compare(const SortableJob *j1, const SortableJob *j2, const SortableJobOrder::CompareInformation *info) const
+{
+    /* Based on F1 = log10(estimated_processing_time) * requested_resources + 870*log10(job_arrival_date), 
+    as described in https://dl.acm.org/doi/epdf/10.1145/3126908.3126955 */
+    (void) info;
+
+    double walltime_1 = (double) j1->job->walltime; 
+    double walltime_2 = (double) j2->job->walltime;
+    
+    double nb_req_res_1 = (double) j1->job->nb_requested_resources; 
+    double nb_req_res_2 = (double) j2->job->nb_requested_resources;
+    
+    double rel_date_1 = (double) j1->release_date; 
+    double rel_date_2 = (double) j2->release_date;
+
+    // For safety, we add +1.0 into numbers in log to ensure we don't do log(0), since the release_date of the first job can be equal to 0.
+    double job_1_f1_score = (std::log10(walltime_1 + 1.0) * nb_req_res_1) + (870.0 * std::log10(rel_date_1 + 1.0));
+    double job_2_f1_score = (std::log10(walltime_2 + 1.0) * nb_req_res_2) + (870.0 * std::log10(rel_date_2 + 1.0));
+
+    if (areEssentiallyEqual(job_1_f1_score, job_2_f1_score)) 
+        return j1->release_date < j2->release_date;
+    
+    return job_1_f1_score < job_2_f1_score;
+}
+
+void AscendingF1Order::updateJob(SortableJob *job, const SortableJobOrder::UpdateInformation *info) const
+{
+    (void) job;
+    (void) info;
+}
+
+FrontierOrder::FrontierCompareInformation::FrontierCompareInformation(int nb_machines) :
+    nb_machines(nb_machines)
+{
+
+}
+
+FrontierOrder::FrontierCompareInformation::~FrontierCompareInformation()
+{
+
+}
+
+FrontierOrder::~FrontierOrder()
+{
+
+}
+
+bool FrontierOrder::compare(const SortableJob *j1, const SortableJob *j2, const SortableJobOrder::CompareInformation *info) const
+{
+    // Frontier scheduling policy: priority = age_seconds + site_factor_boost
+    // Site factor boost depends on the percentage of nodes requested:
+    // Bin 1 (>= 60% of nodes): 15 days boost
+    // Bin 2 (>= 20% of nodes): 10 days boost
+    // Bin 3 (>= 2% of nodes):  0 days boost
+    // Bin 4 (>= 1% of nodes):  0 days boost
+    // Bin 5 (< 1% of nodes):   0 days boost
+
+    const FrontierCompareInformation * frontier_info = dynamic_cast<const FrontierCompareInformation *>(info);
+
+    // If info is not provided or nb_machines is not set, fall back to FCFS
+    int nb_machines = (frontier_info != nullptr && frontier_info->nb_machines > 0) ? frontier_info->nb_machines : 1;
+
+    auto get_aging_boost_seconds = [nb_machines](const SortableJob *job) -> double {
+        double percentage = (double)job->job->nb_requested_resources / (double)nb_machines;
+
+        if (percentage >= 0.60) return 15.0 * 86400.0;  // 15 days in seconds
+        else if (percentage >= 0.20) return 10.0 * 86400.0;  // 10 days in seconds
+        else return 0.0;  // Bins 3, 4, 5 have no boost
+    };
+
+    double age_j1 = (double)j1->age;
+    double age_j2 = (double)j2->age;
+
+    double priority_j1 = age_j1 + get_aging_boost_seconds(j1);
+    double priority_j2 = age_j2 + get_aging_boost_seconds(j2);
+
+    if (areEssentiallyEqual(priority_j1, priority_j2))
+        return j1->job->id < j2->job->id;  // Tiebreak by job ID
+
+    return priority_j1 > priority_j2;  // Higher priority first
+}
+
+void FrontierOrder::updateJob(SortableJob *job, const SortableJobOrder::UpdateInformation *info) const
+{
+    job->update_age(info->current_date);
+}
+
 /**********
 ** QUEUE **
 **********/
@@ -353,4 +489,3 @@ std::list<SortableJob *>::const_iterator Queue::end() const
 {
     return _jobs.end();
 }
-

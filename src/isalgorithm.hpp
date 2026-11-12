@@ -163,4 +163,6 @@ protected:
     bool _nopped_recently = false;
     bool _consumed_joules_updated_recently = false;
     double _consumed_joules = 0.0;
+    double _carbon_intensity = 0.0;
+    double _water_intensity = 0.0;
 };
